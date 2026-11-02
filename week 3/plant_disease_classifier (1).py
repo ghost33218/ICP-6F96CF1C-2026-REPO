@@ -391,7 +391,6 @@ plt.title(
 plt.show()
 print("Predicted Disease:", predicted_class)
 print("Confidence:", round(confidence, 2), "%")
-)
 
 model.save("plant_disease_cnn.keras")
 
