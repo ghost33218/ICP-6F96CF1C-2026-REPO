@@ -14,35 +14,47 @@ from ultralytics import YOLO
 
 print(os.listdir('/content'))
 
-zip_path = "/content/Helmet dataset - Kaggle and my own - Copy.zip"
+import zipfile
+import os
 
-print("Exists:", zipfile.os.path.exists(zip_path))
-print("Is ZIP:", zipfile.is_zipfile(zip_path))
+zip_path = "/content/Helmet Detection.v4-final-dataset.yolov8.zip"
 
-zip_path = "/content/Helmet dataset - Kaggle and my own - Copy.zip"
+extract_path = "/content/helmet_dataset"
 
-with zipfile.ZipFile(zip_path, 'r') as z:
-    z.extractall("/content/dataset")
+os.makedirs(extract_path, exist_ok=True)
 
-print("Dataset Extracted Successfully!")
+with zipfile.ZipFile(zip_path, "r") as zip_ref:
+    zip_ref.extractall(extract_path)
 
-print(os.listdir("/content/dataset"))
+print("Dataset extracted successfully!")
 
-zip_path = "/content/Helmet dataset - Kaggle and my own - Copy.zip"
+for root, dirs, files in os.walk(extract_path):
+    print("Folder:", root)
+    print("Subfolders:", dirs[:10])
+    print("Files:", files[:10])
 
-with zipfile.ZipFile(zip_path, 'r') as z:
-    print("Number of files:", len(z.namelist()))
-    print("\nFirst 20 entries:")
-    for f in z.namelist()[:20]:
-        print(f)
+    if root.count(os.sep) >= 3:
+        dirs[:] = []
 
-with open("/content/dataset/data.yaml", "r") as f:
-    print(f.read())
+import os
+
+for root, dirs, files in os.walk(extract_path):
+    if "data.yaml" in files:
+        print("data.yaml found at:", os.path.join(root, "data.yaml"))
+
+yaml_path = "/content/helmet_dataset/data.yaml"
+
+with open(yaml_path, "r") as file:
+    print(file.read())
 
 model = YOLO("yolov8n.pt")
 
+print("YOLOv8n model loaded successfully!")
+
+# Train YOLOv8n model
+
 model.train(
-    data="/content/dataset/data.yaml",
+    data="/content/helmet_dataset/data.yaml",
     epochs=50,
     imgsz=640,
     batch=16,
@@ -50,29 +62,90 @@ model.train(
     name="final_helmet_model"
 )
 
-#model evaluation
-model = YOLO("/content/runs/detect/helmet_detection/final_helmet_model/weights/best.pt")
-
-metrics = model.val()
-
-print(metrics.results_dict)
-
-#real time inference
-
-
-model = YOLO("/content/runs/detect/helmet_detection/final_helmet_model/weights/best.pt")
-
-results = model("/content/OIP.jpg", save=True)
-
-#real time inference
-
-
-model = YOLO("/content/runs/detect/helmet_detection/final_helmet_model/weights/best.pt")
-
-model.predict(
-    source="/content/AdobeStock_525843714.mov",
-    save=True,
-    conf=0.25
+best_model_path = (
+    "/content/helmet_detection/"
+    "final_helmet_model/weights/best.pt"
 )
 
-print(os.listdir("/content/runs/detect/predict-2"))
+print("Best model exists:", os.path.exists(best_model_path))
+
+print("Searching for best.pt...\n")
+
+for root, dirs, files in os.walk("/content"):
+    if "best.pt" in files:
+        print("Found model at:", os.path.join(root, "best.pt"))
+
+print("\nTraining folder exists:",
+      os.path.exists("/content/helmet_detection"))
+
+print("Model trainer:", getattr(model, "trainer", None))
+
+print("Current training save directory:",
+      model.trainer.save_dir)
+
+print("Current best model path:",
+      model.trainer.best)
+
+from ultralytics import YOLO
+
+best_model_path = model.trainer.best
+
+best_model = YOLO(best_model_path)
+
+metrics = best_model.val(
+    data="/content/helmet_dataset/data.yaml"
+)
+
+print("\nValidation Results:")
+print(metrics.results_dict)
+
+test_metrics = best_model.val(
+    data="/content/helmet_dataset/data.yaml",
+    split="test"
+)
+
+print("\nTest Results:")
+print(test_metrics.results_dict)
+
+# Helmet Detection using Trained YOLOv8n Model
+import cv2
+from google.colab import files
+
+# Step 1: Load the trained model
+best_model = YOLO(
+    "/content/runs/detect/helmet_detection/final_helmet_model/weights/best.pt"
+)
+
+print("Model loaded successfully!")
+
+# Step 2: Upload an image
+uploaded = files.upload()
+image_path = next(iter(uploaded.keys()))
+
+# Step 3: Perform helmet detection
+results = best_model.predict(
+    source=image_path,
+    conf=0.25,
+    save=True
+)
+
+print("Detection completed!")
+
+# Step 4: Display the image with bounding boxes
+annotated_image = results[0].plot()
+
+plt.figure(figsize=(12, 8))
+plt.imshow(cv2.cvtColor(annotated_image, cv2.COLOR_BGR2RGB))
+plt.axis("off")
+plt.title("Helmet Detection using YOLOv8n")
+plt.show()
+
+# Step 5: Display detected classes and confidence scores
+print("\nDetection Details:")
+
+for box in results[0].boxes:
+    class_id = int(box.cls[0])
+    confidence = float(box.conf[0])
+    class_name = best_model.names[class_id]
+
+    print(f"Class: {class_name} | Confidence: {confidence:.2f}")
